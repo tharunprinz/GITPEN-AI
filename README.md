@@ -311,6 +311,6 @@ This project is licensed under the **MIT License**.
 
 **Author: [tharunprinz](https://github.com/tharunprinz)**
 
-*Peace ;)*
+*Security through intelligent code analysis*
 
 </div>
