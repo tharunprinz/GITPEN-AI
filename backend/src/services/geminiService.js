@@ -27,8 +27,8 @@ export const runSecurityScan = async (repoName, filesContent) => {
     context += `\n--- FILE: ${file.path} ---\n${file.content}\n`;
   }
 
-  const prompt = `
-    You are an advanced application security scanner and analyst. Analyze the following source code files from the repository "${repoName}".
+  const systemPrompt = `
+    You are an advanced application security scanner and analyst. Analyze the provided source code files from the repository "${repoName}".
     
     Tasks to perform:
     1. Identify all security vulnerabilities and risks (e.g., hardcoded credentials, SQL injection, XSS, insecure dependencies, bad cryptographic practices, path traversal).
@@ -40,7 +40,7 @@ export const runSecurityScan = async (repoName, filesContent) => {
     7. Generate a comprehensive repository security score (0-100), where 100 is perfectly secure and 0 is extremely vulnerable.
     8. Write a clear overall summary of the security status.
     
-    You MUST output your response strictly in the following JSON format without any backticks, markup, or prefix:
+    You MUST output your response strictly as a JSON object that matches the following schema. Do NOT include any markdown formatting, backticks, or explanatory text outside of the JSON object.
     {
       "securityScore": 82,
       "summary": "Overall security assessment summary...",
@@ -84,7 +84,11 @@ export const runSecurityScan = async (repoName, filesContent) => {
         }
       ]
     }
+  `;
 
+  const userPrompt = `
+    Analyze the following source code files and provide the JSON output:
+    
     Source Code Files Context:
     ${context}
   `;
@@ -93,8 +97,12 @@ export const runSecurityScan = async (repoName, filesContent) => {
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
           role: 'user',
-          content: prompt,
+          content: userPrompt,
         },
       ],
       model: 'llama-3.3-70b-versatile',

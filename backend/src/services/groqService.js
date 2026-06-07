@@ -25,15 +25,15 @@ export const runCodeQualityScan = async (repoName, filesContent) => {
     context += `\n--- FILE: ${file.path} ---\n${file.content}\n`;
   }
 
-  const prompt = `
-    You are an expert software engineer and code quality inspector. Analyze the following source code files from the repository "${repoName}".
+  const systemPrompt = `
+    You are an expert software engineer and code quality inspector. Analyze the provided source code files from the repository "${repoName}".
     
     Assess the files for:
     1. Readability: Code formatting, naming conventions, docstrings/comments.
     2. Complexity: Cyclomatic complexity, nested structures, long functions.
     3. Recommendations: Refactoring tips, speed optimization, memory leaks, cleaner structure.
     
-    You MUST output your response strictly in the following JSON format without any backticks, markdown, or text wrapping:
+    You MUST output your response strictly as a JSON object that matches the following schema. Do NOT include any markdown formatting, backticks, or text wrapping:
     {
       "score": 85,
       "readability": "Readability assessment summary...",
@@ -43,6 +43,10 @@ export const runCodeQualityScan = async (repoName, filesContent) => {
         "Suggestion 2..."
       ]
     }
+  `;
+
+  const userPrompt = `
+    Analyze the following source code files and provide the JSON output:
 
     Source Code Files Context:
     ${context}
@@ -52,8 +56,12 @@ export const runCodeQualityScan = async (repoName, filesContent) => {
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
           role: 'user',
-          content: prompt,
+          content: userPrompt,
         },
       ],
       model: 'llama-3.3-70b-versatile',
