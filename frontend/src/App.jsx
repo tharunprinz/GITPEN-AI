@@ -30,7 +30,7 @@ function App() {
                 to="/"
                 className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
               >
-                Scan Repo
+                HOME
               </Link>
               <a
                 href="https://github.com/tharunprinz"
