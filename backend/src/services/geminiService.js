@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const MODEL = process.env.CHAT_MODEL || 'meta-llama/llama-3.1-70b-instruct';
+const MODEL = process.env.CHAT_MODEL || 'openai/gpt-4o-mini';
 
 /**
  * Perform security scanning on files using OpenRouter API (fallback from Gemini/Groq).
