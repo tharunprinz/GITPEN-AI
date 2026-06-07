@@ -21,11 +21,12 @@ export const runSecurityScan = async (repoName, filesContent) => {
     return getSimulatedScanData(repoName);
   }
 
-  // Format code files context
-  let context = '';
+  // Format code files context using XML tags to prevent prompt confusion
+  let context = '<repository_files>\n';
   for (const file of filesContent) {
-    context += `\n--- FILE: ${file.path} ---\n${file.content}\n`;
+    context += `  <file path="${file.path}">\n${file.content}\n  </file>\n`;
   }
+  context += '</repository_files>';
 
   const systemPrompt = `
     You are an advanced application security scanner and analyst. Analyze the provided source code files from the repository "${repoName}".

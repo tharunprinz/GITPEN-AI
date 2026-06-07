@@ -20,10 +20,11 @@ export const runCodeQualityScan = async (repoName, filesContent) => {
     return getSimulatedQualityData();
   }
 
-  let context = '';
+  let context = '<repository_files>\n';
   for (const file of filesContent) {
-    context += `\n--- FILE: ${file.path} ---\n${file.content}\n`;
+    context += `  <file path="${file.path}">\n${file.content}\n  </file>\n`;
   }
+  context += '</repository_files>';
 
   const systemPrompt = `
     You are an expert software engineer and code quality inspector. Analyze the provided source code files from the repository "${repoName}".
