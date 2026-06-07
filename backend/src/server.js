@@ -14,12 +14,30 @@ const PORT = process.env.PORT || 5000;
 connectDB();
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  // Allow any Vercel deployment (preview + production)
+  /\.vercel\.app$/,
+  // Add your custom domain here if you have one:
+  // 'https://yourdomain.com',
+];
+
 app.use(cors({
-  origin: '*', // For development accessibility; restrict in production
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, Postman, same-origin)
+    if (!origin) return callback(null, true);
+    const allowed = allowedOrigins.some((o) =>
+      typeof o === 'string' ? o === origin : o.test(origin)
+    );
+    if (allowed) return callback(null, true);
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
+
 
 // Increase server-level timeout to 120s for long-running LLM scan requests
 app.use((req, res, next) => {

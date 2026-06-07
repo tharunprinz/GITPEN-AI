@@ -1,20 +1,31 @@
 import axios from 'axios';
 
-// Axios instance
+// Axios instance — uses VITE_API_URL in production (set in Vercel dashboard)
+// Falls back to empty string which uses Vite's dev proxy on localhost
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '', // Proxied locally, uses absolute URL in prod
+  baseURL: import.meta.env.VITE_API_URL || '',
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 120000, // 120-second timeout for long-running LLM scan requests
+  timeout: 15000, // 15s — individual polling requests are fast; scan runs in background
 });
 
-
 /**
- * Scan a new GitHub repository
+ * Start an async repository scan.
+ * Returns { jobId, status: "pending" } immediately — does NOT block.
  */
 export const triggerScan = async (repoUrl) => {
   const response = await api.post('/api/scan', { repoUrl });
+  return response.data; // { jobId, status, phase }
+};
+
+/**
+ * Poll the status of a running scan job.
+ * Call every 3s until status === "completed" or "failed".
+ * Returns { jobId, status, phase, scanId? }
+ */
+export const getScanStatus = async (jobId) => {
+  const response = await api.get(`/api/scan/status/${jobId}`);
   return response.data;
 };
 
@@ -62,6 +73,7 @@ export const getChatSession = async (scanId) => {
 
 export default {
   triggerScan,
+  getScanStatus,
   getScanHistory,
   getScanDetails,
   getFileContent,

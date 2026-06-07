@@ -1,17 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, History, ShieldAlert, Sparkles, Terminal, Cpu } from 'lucide-react';
-import { triggerScan, getScanHistory } from '../services/api';
+import { Search, History, ShieldAlert, Sparkles, Terminal, Cpu, CheckCircle2, Loader2 } from 'lucide-react';
+import { triggerScan, getScanStatus, getScanHistory } from '../services/api';
 import toast from 'react-hot-toast';
+
+// Ordered phases shown during the scan with animated progress
+const SCAN_PHASES = [
+  { key: 'Queued',                      label: 'Queued for analysis' },
+  { key: 'Fetching repository info...',  label: 'Fetching repository info' },
+  { key: 'Checking latest commit...',    label: 'Checking latest commit' },
+  { key: 'Selecting critical files...',  label: 'Selecting critical files' },
+  { key: 'Downloading file contents...', label: 'Downloading source files' },
+  { key: 'Running AI security analysis...', label: 'Running AI security analysis' },
+  { key: 'Saving results...',            label: 'Saving results to database' },
+  { key: 'Done',                         label: 'Scan complete!' },
+];
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState(null);
   const [history, setHistory] = useState([]);
   const navigate = useNavigate();
+  const pollIntervalRef = useRef(null);
+  const scanToastRef = useRef(null);
 
   useEffect(() => {
     fetchHistory();
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
   }, []);
 
   const fetchHistory = async () => {
@@ -23,31 +41,67 @@ export default function Home() {
     }
   };
 
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
   const handleScan = async (e) => {
     e.preventDefault();
     if (!repoUrl.trim()) {
       return toast.error('Please enter a GitHub repository URL.');
     }
-
     if (!repoUrl.includes('github.com')) {
       return toast.error('Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo)');
     }
 
     setLoading(true);
-    const scanToast = toast.loading('Connecting to GitHub and selecting critical files...');
+    setCurrentPhase('Queued');
+    scanToastRef.current = toast.loading('Connecting to GitHub...');
 
     try {
-      const result = await triggerScan(repoUrl);
-      toast.success(result.cached ? 'Loaded cached scan results.' : 'Scan completed successfully!', { id: scanToast });
-      navigate(`/dashboard/${result.data._id}`);
+      // POST /api/scan — returns immediately with a jobId
+      const { jobId } = await triggerScan(repoUrl);
+
+      // Poll /api/scan/status/:jobId every 3 seconds
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const result = await getScanStatus(jobId);
+          setCurrentPhase(result.phase);
+          toast.loading(result.phase || 'Analyzing...', { id: scanToastRef.current });
+
+          if (result.status === 'completed') {
+            stopPolling();
+            toast.success('Scan completed successfully!', { id: scanToastRef.current });
+            setLoading(false);
+            setCurrentPhase(null);
+            navigate(`/dashboard/${result.scanId}`);
+          } else if (result.status === 'failed') {
+            stopPolling();
+            toast.error(`Scan failed: ${result.error || 'Unknown error'}`, { id: scanToastRef.current });
+            setLoading(false);
+            setCurrentPhase(null);
+          }
+        } catch (pollError) {
+          console.error('Polling error:', pollError);
+          // Don't stop polling on a single network blip — just log it
+        }
+      }, 3000);
     } catch (error) {
       console.error(error);
-      const detailMsg = error.response?.data?.details || error.message;
-      toast.error(`Scanning pipeline failed: ${detailMsg}`, { id: scanToast });
-    } finally {
+      stopPolling();
+      const detailMsg = error.response?.data?.details || error.response?.data?.error || error.message;
+      toast.error(`Scanning failed: ${detailMsg}`, { id: scanToastRef.current });
       setLoading(false);
+      setCurrentPhase(null);
     }
   };
+
+  // Figure out which phase index we're at for the progress bar
+  const phaseIndex = SCAN_PHASES.findIndex((p) => p.key === currentPhase);
+  const progressPct = phaseIndex < 0 ? 0 : Math.round((phaseIndex / (SCAN_PHASES.length - 1)) * 100);
 
   return (
     <div className="flex flex-col items-center justify-center max-w-4xl mx-auto pt-8">
@@ -64,12 +118,12 @@ export default function Home() {
           </span>
         </h1>
         <p className="text-gray-400 text-lg sm:text-xl max-w-2xl mx-auto">
-          Audit configurations, check dependencies, and identify code vulnerabilities instantly using Gemini & Groq AI models.
+          Audit configurations, check dependencies, and identify code vulnerabilities instantly using AI models.
         </p>
       </div>
 
       {/* URL Input Form */}
-      <div className="w-full max-w-3xl mb-16">
+      <div className="w-full max-w-3xl mb-8">
         <form onSubmit={handleScan} className="relative group">
           <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-600 opacity-60 blur-md group-focus-within:opacity-100 transition duration-300"></div>
           <div className="relative flex flex-col sm:flex-row items-center gap-3 p-2 bg-slate-900 border border-white/10 rounded-2xl">
@@ -87,11 +141,11 @@ export default function Home() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-cyan-500 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 text-black font-bold text-sm tracking-wide rounded-xl shadow-lg active:scale-[0.98] transition duration-200 flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-cyan-500 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 text-black font-bold text-sm tracking-wide rounded-xl shadow-lg active:scale-[0.98] transition duration-200 flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {loading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Analyzing...
                 </>
               ) : (
@@ -101,6 +155,52 @@ export default function Home() {
           </div>
         </form>
       </div>
+
+      {/* Live scan progress panel */}
+      {loading && currentPhase && (
+        <div className="w-full max-w-3xl mb-10 glass-panel rounded-2xl border border-cyan-500/20 p-5 space-y-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-cyan-400 font-semibold flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {SCAN_PHASES.find((p) => p.key === currentPhase)?.label || currentPhase}
+            </span>
+            <span className="text-gray-500">{progressPct}%</span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500 rounded-full transition-all duration-700"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+
+          {/* Phase step list */}
+          <div className="grid grid-cols-2 gap-1.5 pt-1">
+            {SCAN_PHASES.slice(0, -1).map((phase, i) => {
+              const isDone = phaseIndex > i;
+              const isActive = phaseIndex === i;
+              return (
+                <div
+                  key={phase.key}
+                  className={`flex items-center gap-2 text-xs px-2 py-1 rounded-lg transition-colors ${
+                    isDone ? 'text-emerald-400' : isActive ? 'text-cyan-300' : 'text-gray-600'
+                  }`}
+                >
+                  {isDone ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  ) : isActive ? (
+                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-current shrink-0 opacity-30" />
+                  )}
+                  {phase.label}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Feature cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-16">
@@ -120,7 +220,7 @@ export default function Home() {
           </div>
           <h3 className="text-lg font-semibold text-white">Deep Code Audits</h3>
           <p className="text-sm text-gray-400">
-            Assess algorithmic complexity, readability, and speed characteristics leveraging Groq's high-speed AI analysis.
+            Assess algorithmic complexity, readability, and speed characteristics leveraging high-speed AI analysis.
           </p>
         </div>
 
@@ -170,11 +270,7 @@ export default function Home() {
                       <span className="text-xs text-gray-400 block">score</span>
                       <span
                         className={`font-extrabold text-sm ${
-                          isExcellent
-                            ? 'text-emerald-400'
-                            : isWarning
-                            ? 'text-yellow-400'
-                            : 'text-red-400'
+                          isExcellent ? 'text-emerald-400' : isWarning ? 'text-yellow-400' : 'text-red-400'
                         }`}
                       >
                         {scan.securityScore}/100
