@@ -1,25 +1,23 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Initialize Gemini Client
-let genAI = null;
-if (GEMINI_API_KEY) {
-  // Use appropriate initialization for the current SDK version
-  // If the user's version is modern:
-  genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+// Initialize Groq Client as a fallback for Gemini
+let groq = null;
+if (GROQ_API_KEY) {
+  groq = new Groq({ apiKey: GROQ_API_KEY });
 }
 
 /**
- * Perform security scanning on files using Google Gemini API.
+ * Perform security scanning on files using Groq API (fallback from Gemini).
  * Uses structured JSON outputs for reliable schema parsing.
  */
 export const runSecurityScan = async (repoName, filesContent) => {
-  if (!GEMINI_API_KEY || !genAI) {
-    console.warn('GEMINI_API_KEY not configured. Simulating fallback data...');
+  if (!GROQ_API_KEY || !groq) {
+    console.warn('API_KEY not configured. Simulating fallback data...');
     return getSimulatedScanData(repoName);
   }
 
@@ -92,20 +90,23 @@ export const runSecurityScan = async (repoName, filesContent) => {
   `;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      model: 'llama-3.3-70b-versatile',
+      response_format: { type: 'json_object' },
     });
 
-    const text = result.response.text();
+    const text = chatCompletion.choices[0].message.content;
     const parsed = JSON.parse(text);
     return parsed;
   } catch (error) {
-    console.error('Error running Gemini security scan:', error);
-    throw new Error(`Gemini security analysis failed: ${error.message}`);
+    console.error('Error running Groq security scan:', error);
+    throw new Error(`Security analysis failed: ${error.message}`);
   }
 };
 
@@ -115,7 +116,7 @@ export const runSecurityScan = async (repoName, filesContent) => {
 const getSimulatedScanData = (repoName) => {
   return {
     securityScore: 68,
-    summary: `GITPEN AI completed a mock scanning run for "${repoName}". Setup your GEMINI_API_KEY in the .env file to enable live deep scans.`,
+    summary: `GITPEN AI completed a mock scanning run for "${repoName}". Setup your API_KEY in the .env file to enable live deep scans.`,
     vulnerabilities: [
       {
         id: "sim-vuln-01",
