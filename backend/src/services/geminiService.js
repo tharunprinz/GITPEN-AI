@@ -87,10 +87,10 @@ export const runSecurityScan = async (repoName, filesContent) => {
   `;
 
   const userPrompt = `
-    Analyze the following source code files and provide the JSON output:
-    
     Source Code Files Context:
     ${context}
+    
+    Now, based on the above code files, output ONLY the valid JSON report matching the schema requested. Do not include any text before or after the JSON.
   `;
 
   try {
