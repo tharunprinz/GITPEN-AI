@@ -21,6 +21,17 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Increase server-level timeout to 120s for long-running LLM scan requests
+app.use((req, res, next) => {
+  res.setTimeout(120000, () => {
+    console.error(`[Timeout] Request ${req.method} ${req.path} timed out after 120s`);
+    if (!res.headersSent) {
+      res.status(503).json({ error: 'Request timed out. The analysis is taking longer than expected. Please try again.' });
+    }
+  });
+  next();
+});
+
 // Routes API Mapping
 app.use('/api/scan', scanRoutes);
 app.use('/api/chat', chatRoutes);

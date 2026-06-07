@@ -10,6 +10,8 @@ export default defineConfig({
         target: 'http://localhost:5001',
         changeOrigin: true,
         secure: false,
+        timeout: 120000,      // 120s proxy timeout for long LLM scans
+        proxyTimeout: 120000, // 120s backend response timeout
       },
     },
   },

@@ -6,7 +6,9 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 120000, // 120-second timeout for long-running LLM scan requests
 });
+
 
 /**
  * Scan a new GitHub repository

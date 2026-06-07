@@ -67,6 +67,7 @@ export const runCodeQualityScan = async (repoName, filesContent) => {
           'X-Title': 'GITPEN AI Security Assistant',
           'Content-Type': 'application/json',
         },
+        timeout: 90000, // 90-second timeout for LLM calls
       }
     );
 
