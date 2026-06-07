@@ -1,23 +1,18 @@
-import Groq from 'groq-sdk';
+import axios from 'axios';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
-// Initialize Groq Client as a fallback for Gemini
-let groq = null;
-if (GROQ_API_KEY) {
-  groq = new Groq({ apiKey: GROQ_API_KEY });
-}
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const MODEL = process.env.CHAT_MODEL || 'meta-llama/llama-3.1-70b-instruct';
 
 /**
- * Perform security scanning on files using Groq API (fallback from Gemini).
+ * Perform security scanning on files using OpenRouter API (fallback from Gemini/Groq).
  * Uses structured JSON outputs for reliable schema parsing.
  */
 export const runSecurityScan = async (repoName, filesContent) => {
-  if (!GROQ_API_KEY || !groq) {
-    console.warn('API_KEY not configured. Simulating fallback data...');
+  if (!OPENROUTER_API_KEY) {
+    console.warn('OPENROUTER_API_KEY not configured. Simulating fallback data...');
     return getSimulatedScanData(repoName);
   }
 
@@ -95,26 +90,31 @@ export const runSecurityScan = async (repoName, filesContent) => {
   `;
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://github.com/GITPEN',
+          'X-Title': 'GITPEN AI Security Assistant',
+          'Content-Type': 'application/json',
         },
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
-      model: 'llama-3.3-70b-versatile',
-      response_format: { type: 'json_object' },
-    });
+      }
+    );
 
-    const text = chatCompletion.choices[0].message.content;
+    const text = response.data.choices[0].message.content;
     const parsed = JSON.parse(text);
     return parsed;
   } catch (error) {
-    console.error('Error running Groq security scan:', error);
+    console.error('Error running security scan via OpenRouter:', error.response?.data || error.message);
     throw new Error(`Security analysis failed: ${error.message}`);
   }
 };
