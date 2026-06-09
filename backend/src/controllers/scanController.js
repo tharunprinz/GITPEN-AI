@@ -248,12 +248,8 @@ export const getScanStatus = async (req, res) => {
  */
 export const getScanHistory = async (req, res) => {
   try {
-    const history = await Scan.find()
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .select('repoUrl owner name branch securityScore vulnerabilities createdAt');
-
-    return res.status(200).json(history);
+    // Disabled global history list to protect repository scan privacy
+    return res.status(200).json([]);
   } catch (error) {
     return res.status(500).json({ error: 'Failed to retrieve scan history' });
   }

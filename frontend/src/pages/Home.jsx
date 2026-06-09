@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Search, History, ShieldAlert, Sparkles, Terminal, Cpu, CheckCircle2, Loader2 } from 'lucide-react';
-import { triggerScan, getScanStatus, getScanHistory } from '../services/api';
+import { triggerScan, getScanStatus, getScanDetails } from '../services/api';
 import toast from 'react-hot-toast';
 
 // Ordered phases shown during the scan with animated progress
@@ -32,10 +32,12 @@ export default function Home() {
     };
   }, []);
 
-  const fetchHistory = async () => {
+  const fetchHistory = () => {
     try {
-      const data = await getScanHistory();
-      setHistory(data);
+      const stored = localStorage.getItem('gitpen_scan_history');
+      if (stored) {
+        setHistory(JSON.parse(stored));
+      }
     } catch (error) {
       console.error('Failed to load history:', error);
     }
@@ -77,6 +79,30 @@ export default function Home() {
             toast.success('Scan completed successfully!', { id: scanToastRef.current });
             setLoading(false);
             setCurrentPhase(null);
+            
+            // Save to local history
+            try {
+              const scanDetails = await getScanDetails(result.scanId);
+              const historyItem = {
+                _id: scanDetails._id,
+                owner: scanDetails.owner,
+                name: scanDetails.name,
+                branch: scanDetails.branch,
+                securityScore: scanDetails.securityScore,
+                vulnerabilities: scanDetails.vulnerabilities || [],
+                createdAt: scanDetails.createdAt,
+              };
+
+              const stored = localStorage.getItem('gitpen_scan_history');
+              let currentHistory = stored ? JSON.parse(stored) : [];
+              currentHistory = currentHistory.filter((item) => item._id !== historyItem._id);
+              currentHistory.unshift(historyItem);
+              currentHistory = currentHistory.slice(0, 10);
+              localStorage.setItem('gitpen_scan_history', JSON.stringify(currentHistory));
+            } catch (historyErr) {
+              console.error('Failed to save to local history:', historyErr);
+            }
+
             navigate(`/dashboard/${result.scanId}`);
           } else if (result.status === 'failed') {
             stopPolling();

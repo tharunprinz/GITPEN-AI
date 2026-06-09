@@ -22,6 +22,28 @@ export default function Dashboard() {
       setLoading(true);
       const data = await getScanDetails(id);
       setScan(data);
+
+      // Save to local history
+      try {
+        const historyItem = {
+          _id: data._id,
+          owner: data.owner,
+          name: data.name,
+          branch: data.branch,
+          securityScore: data.securityScore,
+          vulnerabilities: data.vulnerabilities || [],
+          createdAt: data.createdAt,
+        };
+
+        const stored = localStorage.getItem('gitpen_scan_history');
+        let currentHistory = stored ? JSON.parse(stored) : [];
+        currentHistory = currentHistory.filter((item) => item._id !== historyItem._id);
+        currentHistory.unshift(historyItem);
+        currentHistory = currentHistory.slice(0, 10);
+        localStorage.setItem('gitpen_scan_history', JSON.stringify(currentHistory));
+      } catch (historyErr) {
+        console.error('Failed to update local history:', historyErr);
+      }
     } catch (error) {
       console.error(error);
       toast.error('Failed to retrieve scan results.');
