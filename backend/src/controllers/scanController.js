@@ -80,6 +80,51 @@ const runScanInBackground = async (job, repoUrl) => {
 
     // Assemble and save Scan document
     await ScanJob.findByIdAndUpdate(job._id, { phase: 'Saving results...' });
+
+    // Helper to map and sanitize enums to avoid schema validation errors
+    const mapDependencyStatus = (status) => {
+      const s = String(status || '').toLowerCase().trim();
+      if (s.includes('warning') || s.includes('partial')) return 'warning';
+      if (s.includes('critical') || s.includes('fail')) return 'critical';
+      return 'healthy';
+    };
+
+    const mapConfigStatus = (status) => {
+      const s = String(status || '').toLowerCase().trim();
+      if (s.includes('secure') || s.includes('pass') || s.includes('ok') || s.includes('success')) return 'secure';
+      if (s.includes('fail') || s.includes('crit')) return 'failed';
+      return 'warning'; // default / fallback for other values like 'not applicable'
+    };
+
+    const mapSeverity = (severity) => {
+      const s = String(severity || '').toLowerCase().trim();
+      if (s.includes('crit')) return 'critical';
+      if (s.includes('high')) return 'high';
+      if (s.includes('med')) return 'medium';
+      if (s.includes('low')) return 'low';
+      return 'medium';
+    };
+
+    const sanitizedVulnerabilities = (securityScan.vulnerabilities || []).map((v) => ({
+      ...v,
+      severity: mapSeverity(v.severity),
+    }));
+
+    const rawDependencyHealth = securityScan.dependencyHealth || {};
+    const sanitizedDependencyHealth = {
+      status: mapDependencyStatus(rawDependencyHealth.status),
+      vulnerabilitiesCount: Number(rawDependencyHealth.vulnerabilitiesCount) || 0,
+      outdatedDependencies: (rawDependencyHealth.outdatedDependencies || []).map((d) => ({
+        ...d,
+        severity: d.severity ? mapSeverity(d.severity) : undefined,
+      })),
+    };
+
+    const sanitizedConfigHardening = (securityScan.configHardening || []).map((c) => ({
+      ...c,
+      status: mapConfigStatus(c.status),
+    }));
+
     const scanDoc = new Scan({
       repoUrl: `https://github.com/${owner}/${repo}`,
       owner,
@@ -88,19 +133,15 @@ const runScanInBackground = async (job, repoUrl) => {
       commitHash: resolvedHash,
       securityScore: securityScan.securityScore || 50,
       summary: securityScan.summary || 'Scan completed successfully.',
-      vulnerabilities: securityScan.vulnerabilities || [],
+      vulnerabilities: sanitizedVulnerabilities,
       codeQuality: {
         score: qualityScan.score || 50,
         readability: qualityScan.readability || '',
         complexity: qualityScan.complexity || '',
         suggestions: qualityScan.suggestions || [],
       },
-      dependencyHealth: securityScan.dependencyHealth || {
-        status: 'healthy',
-        vulnerabilitiesCount: 0,
-        outdatedDependencies: [],
-      },
-      configHardening: securityScan.configHardening || [],
+      dependencyHealth: sanitizedDependencyHealth,
+      configHardening: sanitizedConfigHardening,
       analyzedFiles: validFiles.map((f) => ({
         path: f.path,
         size: f.size,

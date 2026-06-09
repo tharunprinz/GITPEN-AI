@@ -98,7 +98,8 @@ export const runSecurityScan = async (repoName, filesContent) => {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
+        max_tokens: 3000,
       },
       {
         headers: {

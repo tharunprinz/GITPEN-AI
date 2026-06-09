@@ -59,6 +59,7 @@ export const queryOpenRouter = async (scanData, chatHistory, userMessage) => {
       {
         model: CHAT_MODEL,
         messages: messages,
+        max_tokens: 1000,
       },
       {
         headers: {
